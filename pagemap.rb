@@ -140,7 +140,7 @@ $options = {:base => 16}
 $options = {:match => ""}
 
 $parser = OptionParser::new do |opts|
-  opts.banner = "Usage: pagemap.rb pid [comma separated list of address] [options]"
+  opts.banner = "Usage: pagemap.rb [options] [pid [address[,adress...]]]"
   opts.on("-b", "--base [BASE]", Integer, "Address base") do |base|
     $options[:base] = base
   end
@@ -158,14 +158,18 @@ $parser = OptionParser::new do |opts|
 end
 addresses = nil
 
-if ARGV.length < 1 or ARGV.length > 2 then
+if ARGV.length > 2 then
   usage("Invalid number of arguments (#{ARGV.length})!")
 end
 
-pid = ARGV[0]
-pid = pid.to_i
-if pid == 0 then
-  usage("Invalid pid!")
+if ARGV.length == 0 then
+  pid = Process.ppid
+else
+  pid = ARGV[0]
+  pid = pid.to_i
+  if pid == 0 then
+    usage("Invalid pid!")
+  end
 end
 
 addresses = ARGV[1].split(",") if ARGV.length == 2
