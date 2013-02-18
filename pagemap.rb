@@ -1,4 +1,5 @@
 #!/usr/bin/ruby
+require 'optparse'
 
 begin
   $kpagecount = File::open("/proc/kpagecount")
@@ -75,12 +76,10 @@ end
 class PageRange
   attr_accessor :start
   attr_accessor :end
-  attr_accessor :page_size
   def initialize(address)
     @start, @end = address.split("-")
     @start = @start.to_i(16)
     @end = @end.to_i(16)
-    @page_size = `getconf PAGESIZE`.to_i
   end
   def to_s
     return @start.to_s(16)+"-"+@end.to_s(16)
@@ -89,16 +88,15 @@ class PageRange
     return @end - @start
   end
   def number
-    return (@end - @start)/@page_size
+    return (@end - @start)/$page_size
   end
   def each_page
     range = @start...@end
-    range.step(@page_size) {|x|
+    range.step($page_size) {|x|
       yield x
     }
   end
 end
-$pagemap = nil
 class Map
   attr_accessor :address
   attr_accessor :perms
@@ -108,18 +106,19 @@ class Map
   attr_accessor :pathname
   attr_accessor :pages
 
-  def Map.convert(line)
+  def Map.convert(line,match="")
     address, perms, offset, device, inode, pathname = line.scan(/([0-9a-fA-F]+-[0-9a-fA-F]+)\s+([rwxsp-]+)\s+([0-9a-fA-F]+)\s+(\S+)\s+([0-9a-fA-F]+)\s+(\S*)/).first
     address = PageRange::new(address)
     offset = offset.to_i(16)
     inode = inode.to_i
-    return Map::new(address, perms, offset, device, inode, pathname)
+    return Map::new(address, perms, offset, device, inode, pathname) if pathname.match(match)
+    return nil
   end
   def initialize(address, perms, offset, device, inode, pathname)
     @address, @perms, @offset, @device, @inode, @pathname = address, perms, offset, device, inode, pathname
     @pages = {}
     @address.each_page{ |page|
-      $pagemap.seek((page/@address.page_size)*8)
+      $pagemap.seek((page/$page_size)*8)
       str = $pagemap.read(8)
       if str then
         @pages[page] = Page::decode(str.unpack('Q').first)
@@ -131,16 +130,84 @@ class Map
   end
 end
 
+def usage(msg=nil)
+  puts msg if msg
+  puts $parser.to_s
+  exit(0)
+end
+
+$options = {:base => 16}
+$options = {:match => ""}
+
+$parser = OptionParser::new do |opts|
+  opts.banner = "Usage: pagemap.rb pid [comma separated list of address] [options]"
+  opts.on("-b", "--base [BASE]", Integer, "Address base") do |base|
+    $options[:base] = base
+  end
+  opts.on("-y", "--[no-]yaml","YAML output") do |yaml|
+    $options[:yaml] = yaml
+  end
+  opts.on("-m", "--match [MATCH]", "Pathname match") do |match|
+    $options[:match] = match
+  end
+  opts.on("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
+  opts.parse!
+end
+addresses = nil
+
+if ARGV.length < 1 or ARGV.length > 2 then
+  usage("Invalid number of arguments (#{ARGV.length})!")
+end
+
 pid = ARGV[0]
+pid = pid.to_i
+if pid == 0 then
+  usage("Invalid pid!")
+end
+
+addresses = ARGV[1].split(",") if ARGV.length == 2
+
+$page_size = `getconf PAGESIZE`.to_i
 $pagemap = File::open("/proc/#{pid}/pagemap")
-maps_lines = File::open("/proc/#{pid}/maps")
-maps = []
-maps_lines.each { |line|
-  maps.push(Map::convert(line))
-}
-maps.each { |map|
-  puts map.to_s
-  puts (map.address.size/1024).to_s + "kB"
-  puts map.address.number.to_s
-  map.address.each_page {|x| puts x.to_s(16) + " " + map.pages[x].to_s}
-}
+
+if addresses then
+  pages = {}
+  addresses.each { |address|
+    page = nil
+    $pagemap.seek((address.to_i($options[:base])/$page_size)*8)
+    str = $pagemap.read(8)
+    if str then
+      page = Page::decode(str.unpack('Q').first)
+    end
+    pages[address] = page
+  }
+  if $options[:yaml] then
+    require 'yaml'
+    puts YAML::dump(pages)
+  else
+    addresses.each { |address|
+      puts address.to_i($options[:base]).to_s(16) + " " + pages[address].to_s
+    }
+  end
+else
+  maps_lines = File::open("/proc/#{pid}/maps")
+  maps = []
+  maps_lines.each { |line|
+    map = Map::convert(line,$options[:match])
+    maps.push(map) if map
+  }
+  if $options[:yaml] then
+    require 'yaml'
+    puts YAML::dump(maps)
+  else
+    maps.each { |map|
+      puts map.to_s
+      puts (map.address.size/1024).to_s + "kB"
+      puts map.address.number.to_s
+      map.address.each_page {|x| puts x.to_s(16) + " " + map.pages[x].to_s}
+    }
+  end
+end
