@@ -71,6 +71,9 @@ class Page
     return "swapped" if @swapped
     return "absent"
   end
+  def absent
+    return ((!@present) && (!@swapped))
+  end
 end
 
 class PageRange
@@ -150,6 +153,9 @@ $parser = OptionParser::new do |opts|
   opts.on("-m", "--match [MATCH]", "Pathname match") do |match|
     $options[:match] = match
   end
+  opts.on("-a", "--[no-]all", "list absent pages") do |v|
+    $options[:all] = true
+  end
   opts.on("-h", "--help", "Show this message") do
     puts opts
     exit
@@ -193,7 +199,10 @@ if addresses then
     puts YAML::dump(pages)
   else
     addresses.each { |address|
-      puts address.to_i($options[:base]).to_s(16) + " " + pages[address].to_s
+      p = pages[address]
+      if p && (!p.absent || $options[:all]) then
+        puts address.to_i($options[:base]).to_s(16) + " " + p.to_s
+      end
     }
   end
 else
@@ -208,10 +217,15 @@ else
     puts YAML::dump(maps)
   else
     maps.each { |map|
-      puts map.to_s
-      puts (map.address.size/1024).to_s + "kB"
-      puts map.address.number.to_s
-      map.address.each_page {|x| puts x.to_s(16) + " " + map.pages[x].to_s}
+      puts '## mapping: ' + map.to_s
+      puts '## mapping size: ' + (map.address.size/1024).to_s + "kB" +
+	' / number of pages: ' + map.address.number.to_s
+      map.address.each_page {|x| 
+        p = map.pages[x]
+        if p && (!p.absent || $options[:all]) then
+          puts x.to_s(16) + " " + p.to_s
+        end
+      }
     }
   end
 end
