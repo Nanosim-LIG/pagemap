@@ -139,8 +139,7 @@ def usage(msg=nil)
   exit(0)
 end
 
-$options = {:base => 16}
-$options = {:match => ""}
+$options = {:match => "", :base => 16}
 
 $parser = OptionParser::new do |opts|
   opts.banner = "Usage: pagemap.rb [options] [pid [address[,adress...]]]"
