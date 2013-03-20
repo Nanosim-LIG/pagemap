@@ -155,6 +155,9 @@ $parser = OptionParser::new do |opts|
   opts.on("-a", "--[no-]all", "list absent pages") do |v|
     $options[:all] = true
   end
+  opts.on("-r", "--ranges [address[-address][,address[-address]...]]", "Specify address ranges") do |range|
+    $options[:ranges] = range
+  end
   opts.on("-h", "--help", "Show this message") do
     puts opts
     exit
