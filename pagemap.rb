@@ -142,7 +142,7 @@ end
 $options = {:match => "", :base => 16}
 
 $parser = OptionParser::new do |opts|
-  opts.banner = "Usage: pagemap.rb [options] [pid [address[,address...]]]"
+  opts.banner = "Usage: pagemap.rb [options] [pid [address[-address][,address[-address]...]]]"
   opts.on("-b", "--base [BASE]", Integer, "Address base") do |base|
     $options[:base] = base
   end
@@ -161,7 +161,7 @@ $parser = OptionParser::new do |opts|
   end
   opts.parse!
 end
-addresses = nil
+addresses = []
 
 if ARGV.length > 2 then
   usage("Invalid number of arguments (#{ARGV.length})!")
@@ -178,29 +178,44 @@ else
 end
 
 addresses = ARGV[1].split(",") if ARGV.length == 2
+addresses += $options[:ranges].split(",") if $options[:ranges]
+
 
 $page_size = `getconf PAGESIZE`.to_i
 $pagemap = File::open("/proc/#{pid}/pagemap")
 
-if addresses then
+if addresses.length != 0 then
   pages = {}
-  addresses.each { |address|
-    page = nil
-    $pagemap.seek((address.to_i($options[:base])/$page_size)*8)
-    str = $pagemap.read(8)
-    if str then
-      page = Page::decode(str.unpack('Q').first)
+  addresses_unranged = []
+  addresses.each { |range|
+    addrs = range.split("-")
+    addrs.collect! { |addr| addr.to_i($options[:base]) }
+    find_and_decode = lambda { |address|
+      page = nil
+      $pagemap.seek((address/$page_size)*8)
+      str = $pagemap.read(8)
+      page = Page::decode(str.unpack('Q').first) if str
+      pages[address] = page
+      addresses_unranged.push(address)
+    }
+    if addrs.length == 2 then
+      if addrs[0] % $page_size != 0 then
+        find_and_decode.call(addrs[0]) if addrs[0] % $page_size != 0
+        addrs[0] += $page_size - (addrs[0] % $page_size)
+      end
+      (addrs[0] - ( addrs[0] % $page_size )).step(addrs[1],$page_size,&find_and_decode)
+    else
+      find_and_decode.call(addrs[0])
     end
-    pages[address] = page
   }
   if $options[:yaml] then
     require 'yaml'
     puts YAML::dump(pages)
   else
-    addresses.each { |address|
+    addresses_unranged.each { |address|
       p = pages[address]
       if p && (!p.absent || $options[:all]) then
-        puts address.to_i($options[:base]).to_s(16) + " " + p.to_s
+        puts address.to_s(16) + " " + p.to_s
       end
     }
   end
