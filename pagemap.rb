@@ -152,7 +152,7 @@ $parser = OptionParser::new do |opts|
   opts.on("-m", "--match [MATCH]", "Pathname match") do |match|
     $options[:match] = match
   end
-  opts.on("-a", "--[no-]all", "list absent pages") do |v|
+  opts.on("-a", "--[no-]all", "List absent pages") do |v|
     $options[:all] = true
   end
   opts.on("-r", "--ranges [address[-address][,address[-address]...]]", "Specify address ranges") do |range|
