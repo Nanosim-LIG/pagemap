@@ -13,6 +13,7 @@ rescue Exception => e
   $kpageflags = nil
 end
 
+
 class Flags
   attr_accessor :value
   FLAGS = ["LOCKED", "ERROR", "REFERENCED", "UPTODATE", "DIRTY", "LRU", "ACTIVE", "SLAB", "WRITEBACK", "RECLAIM", "BUDDY", "MMAP", "ANON", "SWAPCACHE", "SWAPBACKED", "COMPOUND_HEAD", "COMPOUND_TAIL", "HUGE", "UNEVICTABLE", "HWPOISON", "NOPAGE", "KSM"]
@@ -108,6 +109,8 @@ class Map
   attr_accessor :inode
   attr_accessor :pathname
   attr_accessor :pages
+  attr_accessor :numa_policy
+  attr_accessor :numa_informations
 
   def Map.convert(line,match="")
     address, perms, offset, device, inode, pathname = line.scan(/([0-9a-fA-F]+-[0-9a-fA-F]+)\s+([rwxsp-]+)\s+([0-9a-fA-F]+)\s+(\S+)\s+([0-9a-fA-F]+)\s+(\S*)/).first
@@ -131,6 +134,52 @@ class Map
   def to_s
     return @address.to_s + " " + @perms + " " + @offset.to_s(16) + " " + @device + " " + @inode.to_s + " " + @pathname
   end
+  def add_numa(numa_map)
+    @numa_policy = numa_map.policy
+    @numa_informations = numa_map.informations
+  end
+end
+class NumaInformations < Hash
+  attr_accessor :nodes
+  def initialize(informations)
+    infos = informations.scan(/\S+/)
+    @nodes = {}
+    infos.each { |info|
+      key,value = info.split("=")
+      if num = key.scan(/N(\d+)/).first then
+        @nodes[num.pop] = value
+      else
+        self[key] = value
+      end
+    }
+  end
+  def to_s
+    s = []
+    self.each { |key, value|
+      str = "#{key}"
+      str += "=#{value}" if value
+      s.push( str )
+    }
+    @nodes.each { |key, value|
+      str = "N#{key}=#{value}"
+      s.push( str )
+    }
+    return s.join(" ")
+  end
+end
+class NumaMap
+  attr_accessor :address
+  attr_accessor :policy
+  attr_accessor :informations
+  def NumaMap.convert(line)
+    address, policy, informations = line.scan(/([0-9a-fA-F]+)\s+(\w+)\s*(.*)/).first
+    address = address.to_i(16)
+    informations = NumaInformations::new(informations)
+    return NumaMap::new(address, policy, informations)
+  end
+  def initialize(address, policy, informations)
+    @address, @policy, @informations = address, policy, informations
+  end
 end
 
 def usage(msg=nil)
@@ -153,7 +202,10 @@ $parser = OptionParser::new do |opts|
     $options[:match] = match
   end
   opts.on("-a", "--[no-]all", "List absent pages") do |v|
-    $options[:all] = true
+    $options[:all] = v
+  end
+  opts.on("-n", "--[no-]numa", "Add numa information") do |v|
+    $options[:numa] = v
   end
   opts.on("-r", "--ranges [address[-address][,address[-address]...]]", "Specify address ranges") do |range|
     $options[:ranges] = range
@@ -186,6 +238,14 @@ addresses += $options[:ranges].split(",") if $options[:ranges]
 
 $page_size = `getconf PAGESIZE`.to_i
 $pagemap = File::open("/proc/#{pid}/pagemap")
+numa_maps_lines = nil
+begin
+  if $options[:numa] then
+    numa_maps_lines = File::open("/proc/#{pid}/numa_maps")
+  end
+rescue Exception => e
+  numa_maps_lines = nil
+end
 
 if addresses.length != 0 then
   pages = {}
@@ -223,11 +283,21 @@ if addresses.length != 0 then
     }
   end
 else
+  numa_maps = {}
+  if numa_maps_lines then
+    numa_maps_lines.each { |line|
+      numa_map = NumaMap::convert(line)
+      numa_maps[numa_map.address] = numa_map if numa_map
+    }
+  end
   maps_lines = File::open("/proc/#{pid}/maps")
   maps = []
   maps_lines.each { |line|
     map = Map::convert(line,$options[:match])
-    maps.push(map) if map
+    if map then
+      map.add_numa(numa_maps[map.address.start]) if numa_maps[map.address.start]
+      maps.push(map)
+    end
   }
   if $options[:yaml] then
     require 'yaml'
@@ -237,6 +307,7 @@ else
       puts '## mapping: ' + map.to_s
       puts '## mapping size: ' + (map.address.size/1024).to_s + "kB" +
 	' / number of pages: ' + map.address.number.to_s
+      puts '## numa policy: ' + map.numa_policy.to_s + ' / numa informations: ' + map.numa_informations.to_s if $options[:numa]
       map.address.each_page {|x| 
         p = map.pages[x]
         if p && (!p.absent || $options[:all]) then
