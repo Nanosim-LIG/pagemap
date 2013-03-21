@@ -351,7 +351,9 @@ else
   maps_lines.each { |line|
     map = Map::convert(line,$options[:match])
     if map then
-      map.add_numa(numa_maps[map.address.start]) if numa_maps[map.address.start]
+      numa_maps.each { |key, value|
+        map.add_numa(value) if map.address.include?(key)
+      }
       maps.push(map)
     end
   }
