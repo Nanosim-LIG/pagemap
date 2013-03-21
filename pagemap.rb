@@ -41,12 +41,14 @@ class MemoryArchitecture
     }
   end
   def find_node(address)
+    result = []
     @nodes.each { |number,ranges|
       ranges.each { |range|
-        return number if range.include?(address)
+        result.push(number) if range.include?(address)
       }
     }
-    return nil
+    result.uniq!
+    return result
   end
 end
 
@@ -67,7 +69,7 @@ class Flags
   end
 end
 class Page
-  attr_accessor :pfn, :swap_type, :swap_offset, :page_shift, :reserved, :swapped, :present, :count, :flags, :node
+  attr_accessor :pfn, :swap_type, :swap_offset, :page_shift, :reserved, :swapped, :present, :count, :flags, :nodes
   def Page.decode(code)
     present = ((code >> 63) & 1) == 1
     swapped = ((code >> 62) & 1) == 1
@@ -97,7 +99,7 @@ class Page
       end
     end
     if $memory_architecture and @present then
-      @node = $memory_architecture.find_node(@pfn << @page_shift)
+      @nodes = $memory_architecture.find_node(@pfn << @page_shift)
     end
   end
   def to_s
@@ -106,7 +108,11 @@ class Page
       s += (@pfn << @page_shift).to_s(16)
       s += " " + @count.to_s if @count
       s += " " + @flags.to_s if @flags
-      s += " N#{@node}" if @node
+      if @nodes then
+        @nodes.each { |node|
+          s += " N#{node}"
+        }
+      end
       return s
     end 
     return "swapped" if @swapped
@@ -139,6 +145,9 @@ class PageRange
     range.step($page_size) {|x|
       yield x
     }
+  end
+  def include?(address)
+    return (@start...@end).include?(address)
   end
 end
 class Map
