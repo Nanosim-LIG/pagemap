@@ -13,6 +13,42 @@ rescue Exception => e
   $kpageflags = nil
 end
 
+class MemoryArchitecture
+  NODE_PATH = "/sys/devices/system/node/"
+  MEMORY_PATH = "/sys/devices/system/memory/"
+  def initialize
+    @nodes = {}
+    block_size_bytes = File::read(MEMORY_PATH+"block_size_bytes")
+    block_size_bytes = block_size_bytes.to_i(16)
+    nodes = Dir.entries(NODE_PATH)
+    nodes.select! { |entry| entry.match(/node\d+/) }
+    nodes.each { |node|
+      memories = Dir.entries(NODE_PATH+node)
+      memories.select! { |entry| entry.match(/memory\d+/) }
+      ranges = []
+      memories.each { |memory|
+        phys_index = File::read(MEMORY_PATH+memory+"/phys_index")
+        phys_index = phys_index.to_i(16)
+        end_phys_index = File::read(MEMORY_PATH+memory+"/end_phys_index")
+        end_phys_index = end_phys_index.to_i(16)
+        start_address = phys_index*block_size_bytes
+        end_address = (end_phys_index-phys_index+1)*block_size_bytes+start_address
+        ranges.push(start_address...end_address)
+      }
+      number = node.scan(/(\d+)/).first[0]
+      number = number.to_i
+      @nodes[number] = ranges
+    }
+  end
+  def find_node(address)
+    @nodes.each { |number,ranges|
+      ranges.each { |range|
+        return number if range.include?(address)
+      }
+    }
+    return nil
+  end
+end
 
 class Flags
   attr_accessor :value
@@ -31,7 +67,7 @@ class Flags
   end
 end
 class Page
-  attr_accessor :pfn, :swap_type, :swap_offset, :page_shift, :reserved, :swapped, :present, :count, :flags
+  attr_accessor :pfn, :swap_type, :swap_offset, :page_shift, :reserved, :swapped, :present, :count, :flags, :node
   def Page.decode(code)
     present = ((code >> 63) & 1) == 1
     swapped = ((code >> 62) & 1) == 1
@@ -60,6 +96,9 @@ class Page
         @flags = Flags::new(str.unpack('Q').first)
       end
     end
+    if $memory_architecture and @present then
+      @node = $memory_architecture.find_node(@pfn << @page_shift)
+    end
   end
   def to_s
     s = ""
@@ -67,6 +106,7 @@ class Page
       s += (@pfn << @page_shift).to_s(16)
       s += " " + @count.to_s if @count
       s += " " + @flags.to_s if @flags
+      s += " N#{@node}" if @node
       return s
     end 
     return "swapped" if @swapped
@@ -239,13 +279,20 @@ addresses += $options[:ranges].split(",") if $options[:ranges]
 $page_size = `getconf PAGESIZE`.to_i
 $pagemap = File::open("/proc/#{pid}/pagemap")
 numa_maps_lines = nil
-begin
-  if $options[:numa] then
+$memory_architecture = nil
+if $options[:numa] then
+  begin
     numa_maps_lines = File::open("/proc/#{pid}/numa_maps")
+  rescue Exception => e
+    numa_maps_lines = nil
   end
-rescue Exception => e
-  numa_maps_lines = nil
+  begin
+    $memory_architecture = MemoryArchitecture::new
+  rescue Exception => e
+    $memory_architecture = nil
+  end
 end
+
 
 if addresses.length != 0 then
   pages = {}
