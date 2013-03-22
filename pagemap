@@ -215,6 +215,12 @@ class NumaInformations < Hash
     }
     return s.join(" ")
   end
+  def stack?
+    self.each_key { |key|
+      return true if key.match(/stack/)
+    }
+    return false
+  end
 end
 class NumaMap
   attr_accessor :address
@@ -224,6 +230,7 @@ class NumaMap
     address, policy, informations = line.scan(/([0-9a-fA-F]+)\s+(\w+)\s*(.*)/).first
     address = address.to_i(16)
     informations = NumaInformations::new(informations)
+    address += $page_size if informations.stack? #remove stack guard page
     return NumaMap::new(address, policy, informations)
   end
   def initialize(address, policy, informations)
