@@ -54,17 +54,16 @@ end
 
 class Flags
   attr_accessor :value
-  FLAGS = ["LOCKED", "ERROR", "REFERENCED", "UPTODATE", "DIRTY", "LRU", "ACTIVE", "SLAB", "WRITEBACK", "RECLAIM", "BUDDY", "MMAP", "ANON", "SWAPCACHE", "SWAPBACKED", "COMPOUND_HEAD", "COMPOUND_TAIL", "HUGE", "UNEVICTABLE", "HWPOISON", "NOPAGE", "KSM"]
+  HACK_FLAGS = [ ["RESERVED",32], ["MLOCKED",33], ["MAPPEDTODISK",34], ["PRIVATE",35], ["PRIVATE_2",36], ["OWNER_PRIVATE",37], ["ARCH",38], ["UNCACHED",39]]
+  FLAGS = [["LOCKED",0], ["ERROR",1], ["REFERENCED",2], ["UPTODATE",3], ["DIRTY",4], ["LRU",5], ["ACTIVE",6], ["SLAB",7], ["WRITEBACK",8], ["RECLAIM",9], ["BUDDY",10], ["MMAP",11], ["ANON",12], ["SWAPCACHE",13], ["SWAPBACKED",14], ["COMPOUND_HEAD",15], ["COMPOUND_TAIL",16], ["HUGE",17], ["UNEVICTABLE",18], ["HWPOISON",19], ["NOPAGE",20], ["KSM",21], ["THP",22]]
   def initialize(value)
     @value = value
   end
   def to_s
-    val = @value
     flags = []
-    FLAGS.each{ |flag|
-      flags.push(flag) if (val & 1) == 1
-      val = val >> 1
-    }
+    process_flag = Proc.new { |flag, val| flags.push(flag) if ( (@value >> val) & 1) == 1 }
+    FLAGS.each(&process_flag)
+    HACK_FLAGS.each(&process_flag) if $options[:hack]
     return flags.join(" ")
   end
 end
@@ -259,6 +258,9 @@ $parser = OptionParser::new do |opts|
   end
   opts.on("-a", "--[no-]all", "List absent pages") do |v|
     $options[:all] = v
+  end
+  opts.on("-k", "--[no-]hack", "Use kernel hack flags (unreliable)") do |v|
+    $options[:hack] = v
   end
   opts.on("-n", "--[no-]numa", "Add numa information") do |v|
     $options[:numa] = v
