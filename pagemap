@@ -21,10 +21,10 @@ class MemoryArchitecture
     block_size_bytes = File::read(MEMORY_PATH+"block_size_bytes")
     block_size_bytes = block_size_bytes.to_i(16)
     nodes = Dir.entries(NODE_PATH)
-    nodes.select! { |entry| entry.match(/node\d+/) }
+    nodes = nodes.select { |entry| entry.match(/node\d+/) }
     nodes.each { |node|
       memories = Dir.entries(NODE_PATH+node)
-      memories.select! { |entry| entry.match(/memory\d+/) }
+      memories = memories.select { |entry| entry.match(/memory\d+/) }
       ranges = []
       memories.each { |memory|
         phys_index = File::read(MEMORY_PATH+memory+"/phys_index")
