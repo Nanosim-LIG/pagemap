@@ -1,18 +1,6 @@
 #!/usr/bin/ruby
 require 'optparse'
 
-begin
-  $kpagecount = File::open("/proc/kpagecount")
-rescue Exception => e
-  $kpagecount = nil
-end
-
-begin
-  $kpageflags = File::open("/proc/kpageflags")
-rescue Exception => e
-  $kpageflags = nil
-end
-
 class MemoryArchitecture
   NODE_PATH = "/sys/devices/system/node/"
   MEMORY_PATH = "/sys/devices/system/memory/"
@@ -302,6 +290,9 @@ $parser = OptionParser::new do |opts|
   opts.on("-r", "--ranges [address[-address][,address[-address]...]]", "Specify address ranges") do |range|
     $options[:ranges] = range
   end
+  opts.on("-d", "--[no-]debug", "Print debug messages") do |v|
+    $options[:debug] = v
+  end
   opts.on("-h", "--help", "Show this message") do
     puts opts
     exit
@@ -342,13 +333,29 @@ if $options[:numa] then
   begin
     numa_maps_lines = File::open("/proc/#{pid}/numa_maps")
   rescue Exception => e
+    $stderr.puts e if $options[:debug]
     numa_maps_lines = nil
   end
   begin
     $memory_architecture = MemoryArchitecture::new
   rescue Exception => e
+    $stderr.puts e if $options[:debug]
     $memory_architecture = nil
   end
+end
+
+begin
+  $kpagecount = File::open("/proc/kpagecount")
+rescue Exception => e
+  $stderr.puts e if $options[:debug]
+  $kpagecount = nil
+end
+
+begin
+  $kpageflags = File::open("/proc/kpageflags")
+rescue Exception => e
+  $stderr.puts e if $options[:debug]
+  $kpageflags = nil
 end
 
 
