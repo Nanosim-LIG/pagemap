@@ -22,10 +22,13 @@ class MemoryArchitecture
     block_size_bytes = block_size_bytes.to_i(16)
     nodes = Dir.entries(NODE_PATH)
     nodes = nodes.select { |entry| entry.match(/node\d+/) }
+    @memories = Hash::new { |hash,key| hash[key] = [] }
     nodes.each { |node|
       memories = Dir.entries(NODE_PATH+node)
       memories = memories.select { |entry| entry.match(/memory\d+/) }
       ranges = []
+      number = node.scan(/(\d+)/).first[0]
+      number = number.to_i
       memories.each { |memory|
         phys_index = File::read(MEMORY_PATH+memory+"/phys_index")
         phys_index = phys_index.to_i(16)
@@ -34,20 +37,28 @@ class MemoryArchitecture
         start_address = phys_index*block_size_bytes
         end_address = (end_phys_index-phys_index+1)*block_size_bytes+start_address
         ranges.push(start_address...end_address)
+        @memories[start_address...end_address].push(number)
       }
-      number = node.scan(/(\d+)/).first[0]
-      number = number.to_i
       @nodes[number] = ranges
     }
+    @memories = @memories.to_a
+    @memories.sort! { |a,b| a[0].end <= b[0].begin ? -1 : b[0].end <= a[0].begin ? +1 : raise( "Overlapping memory ranges!" ) }
+  end
+
+  def binary_search(address, from, to)
+    split = (from+to)/2
+    if address < @memories[split][0].begin then
+      return self.binary_search(address, from, split - 1)
+    elsif address >= @memories[split][0].end then
+      return self.binary_search(address, split + 1, to)
+    else
+      return split
+    end
   end
   def find_node(address)
-    result = []
-    @nodes.each { |number,ranges|
-      ranges.each { |range|
-        result.push(number) if range.include?(address)
-      }
-    }
-    result.uniq!
+    index = binary_search(address, 0, @memories.length - 1)
+    return [] if not @memories[index][0].include?(address)
+    result = @memories[index][1]
     return result
   end
 end
