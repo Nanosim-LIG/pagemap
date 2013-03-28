@@ -168,33 +168,27 @@ class Page
   end
 end
 
-class PageRange
-  attr_accessor :start
-  attr_accessor :end
+class PageRange < Range
   def initialize(address)
-    @start, @end = address.split("-")
-    @start = @start.to_i(16)
-    @end = @end.to_i(16)
+    a_start, a_end = address.split("-")
+    a_start = a_start.to_i(16)
+    a_end = a_end.to_i(16)
+    super(a_start, a_end, true)
   end
   def to_s
-    return @start.to_s(16)+"-"+@end.to_s(16)
+    return self.begin.to_s(16)+"-"+self.end.to_s(16)
   end
   def size
-    return @end - @start
+    return self.end - self.begin
   end
   def number
-    return (@end - @start)/$page_size
+    return (self.end - self.begin)/$page_size
   end
-  def each_page
-    range = @start...@end
-    range.step($page_size) {|x|
-      yield x
-    }
-  end
-  def include?(address)
-    return (@start...@end).include?(address)
+  def each_page(&proc)
+    self.step($page_size, &proc)
   end
 end
+
 class Map
   attr_accessor :address
   attr_accessor :perms
