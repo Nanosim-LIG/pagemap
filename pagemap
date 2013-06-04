@@ -286,7 +286,7 @@ end
 $options = {:match => "", :base => 16}
 
 $parser = OptionParser::new do |opts|
-  opts.banner = "Usage: pagemap.rb [options] [pid [address[-address][,address[-address]...]]]"
+  opts.banner = "Usage: pagemap [options] [pid [address[-address][,address[-address]...]]]"
   opts.on("-b", "--base [BASE]", Integer, "Address base") do |base|
     $options[:base] = base
   end
