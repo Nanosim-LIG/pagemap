@@ -321,7 +321,7 @@ $parser = OptionParser::new do |opts|
     exit
   end
   opts.on("--version", "Display version") do
-    puts "Version #{PAGEMAP_VERSION}"
+    puts "pagemap #{PAGEMAP_VERSION}"
     exit
   end
   opts.on("--help-symbols", "Show flags symbols") do
