@@ -1,6 +1,6 @@
 
 pagemap.1: pagemap Makefile
-	help2man --no-info ./pagemap > $@
+	help2man --name="analyze and print the physical memory layout of a Linux process" --no-info ./pagemap > $@
 
 .PHONY: clean
 clean:
