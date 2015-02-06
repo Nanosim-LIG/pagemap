@@ -63,21 +63,28 @@ class MemoryArchitecture
   end
 
   def binary_search(address, from, to)
-    split = (from+to)/2
-    if address < @memories[split][0].begin then
-      return self.binary_search(address, from, split - 1)
-    elsif address >= @memories[split][0].end then
-      return self.binary_search(address, split + 1, to)
-    else
-      return split
+    low = from
+    high = to
+    while (low <= high) do
+      split = (low+hig)/2
+      if address < @memories[split][0].begin then
+        high = split - 1
+      elsif address > @memories[split][0].end then
+        low = split + 1
+      else
+        return split
+      end
     end
+    raise "Could not find address #{address}!"
   end
+
   def find_node(address)
     index = binary_search(address, 0, @memories.length - 1)
     return [] if not @memories[index][0].include?(address)
     result = @memories[index][1]
     return result
   end
+
 end
 
 class Flags
