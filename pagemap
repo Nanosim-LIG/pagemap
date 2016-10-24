@@ -49,8 +49,12 @@ class MemoryArchitecture
       memories.each { |memory|
         phys_index = File::read(MEMORY_PATH+memory+"/phys_index")
         phys_index = phys_index.to_i(16)
-        end_phys_index = File::read(MEMORY_PATH+memory+"/end_phys_index")
-        end_phys_index = end_phys_index.to_i(16)
+        begin
+          end_phys_index = File::read(MEMORY_PATH+memory+"/end_phys_index")
+          end_phys_index = end_phys_index.to_i(16)
+        rescue
+          end_phys_index = phys_index
+        end
         start_address = phys_index*block_size_bytes
         end_address = (end_phys_index-phys_index+1)*block_size_bytes+start_address
         ranges.push(start_address...end_address)
