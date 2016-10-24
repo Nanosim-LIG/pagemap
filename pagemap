@@ -135,7 +135,7 @@ class Page
     pfn = code & 0x7fffffffffffff
     swap_type = code & 0x1f
     swap_offset = (code & 0x7fffffffffffe0) >> 5
-    page_shift = (code >> 55) & 0x3f
+    page_shift = $page_shift
     return Page::new(pfn, swap_type, swap_offset, page_shift, reserved, swapped, present)
   end
   def initialize(pfn, swap_type, swap_offset, page_shift, reserved, swapped, present)
@@ -370,6 +370,12 @@ addresses += $options[:ranges].split(",") if $options[:ranges]
 
 
 $page_size = `getconf PAGESIZE`.to_i
+ps = $page_size
+$page_shift = 0
+while ps & 1 == 0 do
+  $page_shift += 1
+  ps >>= 1
+end
 $pagemap = File::open("/proc/#{pid}/pagemap")
 numa_maps_lines = nil
 $memory_architecture = nil
